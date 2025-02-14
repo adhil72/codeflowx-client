@@ -1,0 +1,24 @@
+{
+  "project": {
+    "frameWork": {
+      "name": "EXPRESS",
+      "version": "^4.21.2",
+      "buildFile": "{\"name\":\"nodejs\",\"version\":\"1.0.0\",\"description\":\"\",\"main\":\"index.js\",\"scripts\":{\"test\":\"echo \\\"Error: no test specified\\\" \u0026\u0026 exit 1\"},\"author\":\"\",\"license\":\"ISC\",\"dependencies\":{\"express\":\"^4.21.2\"}}"
+    },
+    "languages": {
+      "name": "JAVASCRIPT",
+      "exts": [
+        "js",
+        "jsx"
+      ]
+    },
+    "projectFiles": [
+      {
+        "name": "App.js",
+        "path": "/home/adhil/Desktop/youtube/NODEJS/src/App.js",
+        "content": ""
+      }
+    ]
+  },
+  "prompt": "setup app.js for express"
+}

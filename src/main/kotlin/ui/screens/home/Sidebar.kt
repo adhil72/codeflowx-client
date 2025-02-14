@@ -13,6 +13,7 @@ import androidx.compose.ui.unit.dp
 fun Sidebar() {
     val openFolderPicker = OpenFolderPicker.current
     val currentDir = EngineLocation.current
+    val project = SelectedProject.current
 
     Surface(
         modifier = Modifier
@@ -28,23 +29,21 @@ fun Sidebar() {
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             Text(
-                text = "Navigation",
+                text = "Project details",
                 style = MaterialTheme.typography.titleMedium,
                 color = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.padding(bottom = 16.dp)
             )
 
             NavigationDrawerItem(
-                icon = { Icon(Icons.Default.Home, contentDescription = "Home") },
-                label = { Text("Home") },
+                label = { Text(project.value.frameWork.name.toString()) },
                 selected = false,
                 onClick = { /* Handle home click */ },
                 modifier = Modifier.fillMaxWidth()
             )
 
             NavigationDrawerItem(
-                icon = { Icon(Icons.Default.Menu, contentDescription = "Change Directory") },
-                label = { Text("Change Directory") },
+                label = { Text("${project.value.frameWork.version}") },
                 selected = false,
                 onClick = {
 
@@ -53,36 +52,22 @@ fun Sidebar() {
             )
 
             NavigationDrawerItem(
-                icon = { Icon(Icons.Default.Settings, contentDescription = "Settings") },
-                label = { Text("Settings") },
+                label = { Text(project.value.language.name) },
                 selected = false,
                 onClick = { /* Handle settings click */ },
                 modifier = Modifier.fillMaxWidth()
             )
 
-            NavigationDrawerItem(
-                icon = { Icon(Icons.Default.Info, contentDescription = "About") },
-                label = { Text("About") },
-                selected = false,
-                onClick = { /* Handle about click */ },
-                modifier = Modifier.fillMaxWidth()
-            )
+//            NavigationDrawerItem(
+//                label = { Text(project.value.frameWork) },
+//                selected = false,
+//                onClick = { /* Handle about click */ },
+//                modifier = Modifier.fillMaxWidth()
+//            )
 
             Spacer(modifier = Modifier.weight(1f))
 
             Divider()
-
-            Text(
-                text = "Current Directory:",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = 16.dp, bottom = 4.dp)
-            )
-            Text(
-                text = "currentDir.path",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
         }
     }
 }

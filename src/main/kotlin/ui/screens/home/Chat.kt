@@ -15,12 +15,17 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.*
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import engine.Engine
 import engine.Terminal
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.suspendCancellableCoroutine
+import java.io.File
 
 @Composable
 fun ChatMessageItem(message: ChatMessage) {
@@ -38,21 +43,25 @@ fun ChatMessageItem(message: ChatMessage) {
                 color = MaterialTheme.colorScheme.primary
             )
         }
-        if (message.content.isNotBlank()) Text(
-            text = message.content.trim(),
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurface,
-            fontFamily = if (message.sender == "TR") FontFamily.Monospace else FontFamily.Default,
-        )
+        message.content()
     }
 }
 
 data class ChatMessage(
     val sender: String,
-    val content: String,
+    val content: @Composable () -> Unit,
     val showName: Boolean = true,
     val isTyping: Boolean = false
 )
+
+suspend fun executeTerminalCommand(script: String, engineLocation: File, onUpdate: (String) -> Unit) {
+    suspendCancellableCoroutine<Unit> { continuation ->
+        Terminal(engineLocation).executeCommand(script) {
+            onUpdate(it)
+            continuation.resumeWith(Result.success(Unit))
+        }
+    }
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -61,48 +70,74 @@ fun Chat() {
     val messages = remember { mutableStateListOf<ChatMessage>() }
     val engineLocation = EngineLocation.current
     val engine = Engine(engineLocation.value)
+    val openFolderPickerDialog = remember { mutableStateOf(true) }
+    val projectCompo = SelectedProject.current
+
+    LaunchedEffect(engine.project) {
+        if (engine.project != null) projectCompo.value = engine.project!!
+    }
+
     val listState = rememberLazyListState()
+
+    if (openFolderPickerDialog.value) {
+        SelectFolderDialogue({ openFolderPickerDialog.value = false }) {
+            engineLocation.value = File(it)
+            CoroutineScope(Dispatchers.Default).launch {
+                openFolderPickerDialog.value = false
+            }
+        }
+    }
 
     fun sendMessage(isTerminalCommand: Boolean = false) {
         if (isTerminalCommand) {
             val msg = messageInput.value
             messageInput.value = ""
-            messages.add(ChatMessage("You", msg))
-            messages.add(ChatMessage("Terminal", ""))
+            messages.add(ChatMessage("You", { Text(msg, color = Color.White) }))
+            messages.add(ChatMessage("Terminal", { Text("") }))
             val terminal = Terminal(engineLocation.value)
 
-            val typingIndicator = ChatMessage("", "...", isTyping = true)
+            val typingIndicator = ChatMessage("", { Text("...") }, isTyping = true)
             messages.add(typingIndicator)
 
             terminal.executeCommand(messageInput.value) {
                 messages.remove(typingIndicator)
-                messages.add(ChatMessage("TR", it, false))
+                messages.add(ChatMessage("TR", { Text(it) }, false))
                 messages.add(typingIndicator)
             }
             messages.remove(typingIndicator)
-            messages.add(ChatMessage("TR", "Command executed successfully", false))
+            messages.add(ChatMessage("TR", { Text("Command executed successfully") }, false))
             return
         }
 
         if (messageInput.value.isNotBlank()) {
-            messages.add(ChatMessage("You", messageInput.value))
-            messages.add(ChatMessage("CodeFlowX", ""))
+            messages.add(ChatMessage("You", { bodyText(messageInput.value) }))
+            messages.add(ChatMessage("CodeFlowX", { Text("") }))
             val msg = messageInput.value
             messageInput.value = ""
             var firstResponse = true
 
-            val typingIndicator = ChatMessage("", "...", isTyping = true)
+            val typingIndicator = ChatMessage("", { Text("...") }, isTyping = true)
             messages.add(typingIndicator)
 
-            Thread {
+            CoroutineScope(Dispatchers.Default).launch {
                 engine.execute(msg) {
                     if (firstResponse) {
                         messages.remove(typingIndicator)
                         firstResponse = false
                     }
-                    messages.add(ChatMessage("TR", it, false))
+                    if (it.startsWith("sh")) {
+                        val script = it.replace("sh\n", "").trimEnd('\n')
+                        messages.add(ChatMessage("TR", { shBox(script) }, false))
+                        CoroutineScope(Dispatchers.Default).launch {
+                            executeTerminalCommand(script, engineLocation.value) { result ->
+                                messages.add(ChatMessage("TR", { terminalTextBox(result) }, false))
+                            }
+                        }
+                    } else {
+                        messages.add(ChatMessage("TR", { bodyText(it) }, false))
+                    }
                 }
-            }.start()
+            }
         }
     }
 
@@ -116,17 +151,12 @@ fun Chat() {
             .padding(16.dp)
     ) {
         // Chat header
-        Text(
-            "Chat",
-            style = MaterialTheme.typography.headlineMedium,
-            color = MaterialTheme.colorScheme.onSurface,
-        )
+        headerText("Chat")
 
         // Current directory
         Box(
             modifier = Modifier
                 .clip(RoundedCornerShape(8.dp))
-
                 .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
                 .padding(8.dp),
             contentAlignment = Alignment.Center,
@@ -236,6 +266,61 @@ fun TypingIndicator() {
                 .size(8.dp)
                 .clip(CircleShape)
                 .background(MaterialTheme.colorScheme.primary.copy(alpha = alpha))
+        )
+    }
+}
+
+@Composable
+fun headerText(text: String) {
+    Text(
+        text,
+        style = MaterialTheme.typography.headlineMedium,
+        fontWeight = FontWeight.Bold,
+        color = MaterialTheme.colorScheme.onSurface
+    )
+}
+
+@Composable
+fun bodyText(text: String) {
+    Text(
+        text,
+        style = MaterialTheme.typography.bodyMedium,
+        color = Color.White
+    )
+}
+
+@Composable
+fun shBox(script: String) {
+    Box(
+        modifier = Modifier
+            .clip(RoundedCornerShape(8.dp))
+            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
+            .padding(8.dp)
+            .heightIn(max = 150.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            script,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+    }
+}
+
+@Composable
+fun terminalTextBox(text: String){
+    Box(
+        modifier = Modifier
+            .clip(RoundedCornerShape(8.dp))
+            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
+            .padding(8.dp)
+            .heightIn(max = 150.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurface,
         )
     }
 }

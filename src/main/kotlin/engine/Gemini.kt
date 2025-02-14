@@ -1,6 +1,7 @@
 package engine
 
 import com.google.gson.Gson
+import com.google.gson.JsonParser
 import dto.Content
 import dto.GeminiResponse
 import dto.Part
@@ -9,6 +10,7 @@ import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
+import java.io.File
 
 class GeminiConfig(
     var temperature: Double = 1.0,
@@ -59,6 +61,7 @@ class Gemini(
     fun generate(prompt: String): String {
 
         println("tokens : ${countTokens(prompt)}")
+        File("test", "prompt.txt").writeText(prompt)
 
         contents.add(
             Content(
@@ -69,13 +72,14 @@ class Gemini(
             )
         )
 
-        val body = """
-            {
-                "generationConfig": ${Gson().toJson(generationConfig)},
-                "contents": ${Gson().toJson(contents)},
-                "systemInstruction": ${Gson().toJson(modelInstruction)}
-            }
-        """.trimIndent()
+        val gson = Gson().newBuilder().disableHtmlEscaping().create()
+        val body = gson.toJson(
+            mapOf(
+                "generationConfig" to generationConfig,
+                "contents" to contents,
+                "systemInstruction" to modelInstruction
+            )
+        )
 
         val request = Request.Builder()
             .url(baseUrl)
@@ -84,13 +88,20 @@ class Gemini(
             .build()
 
         val res = client.newCall(request).execute()
-        val resString = res.body!!.string()
-        val responseBody = Gson().fromJson(resString, GeminiResponse::class.java)
+        val response = res.body?.string() ?: ""
+        val text = formatGeminiResponse(response)
+        return text
+    }
 
-        println(resString)
 
-        contents.add(responseBody.candidates[0].content)
-        return responseBody.candidates[0].content.parts[0].text
+    fun formatGeminiResponse(response: String): String {
+        val responseBody = JsonParser.parseString(response).asJsonObject
+        val candidates = responseBody["candidates"].asJsonArray
+        val content = candidates[0].asJsonObject["content"].asJsonObject
+        val parts = content["parts"].asJsonArray
+        val text = parts[0].asJsonObject["text"].asString
+
+        return text
     }
 
 }
